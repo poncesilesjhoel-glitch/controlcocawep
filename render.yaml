@@ -1,0 +1,12 @@
+# Configuración para desplegar en Render (https://render.com) como Blueprint.
+services:
+  - type: web
+    name: control-coca
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    healthCheckPath: /api/config
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10

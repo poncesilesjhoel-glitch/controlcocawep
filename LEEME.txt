@@ -1,0 +1,97 @@
+SISTEMA DE CONTROL DE COMERCIALIZACIÓN DE LA HOJA DE COCA
+Proyecto académico - Bolivia
+==========================================================
+
+Aplicación web local que registra el movimiento de hoja de coca en los mercados
+autorizados (Villa Fátima - La Paz y Sacaba - Cochabamba): lo que ENTRA, lo que se
+VENDE y lo que SALE hacia cada DEPARTAMENTO, con inventario, hojas de ruta con QR y
+reportes. Todos los datos de ejemplo son ficticios.
+
+
+REQUISITOS
+----------
+- Python 3.8 o superior (https://www.python.org/downloads/).
+  En Windows marque la casilla "Add python.exe to PATH" al instalar.
+- No se instala ninguna librería: solo se usa la biblioteca estándar de Python.
+- Un navegador moderno (Chrome, Edge, Firefox).
+- Internet es opcional: solo se usa para dibujar el código QR (qrcodejs desde cdnjs).
+  Sin internet, la hoja de ruta muestra el código en texto.
+
+
+CÓMO EJECUTAR
+-------------
+1. Abra una terminal (PowerShell o Símbolo del sistema) en la carpeta control-coca.
+2. Ejecute:
+       python app.py
+   (en Windows también puede usar:  py app.py)
+3. Abra en el navegador:  http://localhost:8000
+4. Para detener el servidor presione Ctrl+C en la terminal.
+
+La primera vez se crea el archivo control.db con 60 días de movimientos de ejemplo.
+Para empezar de cero con datos nuevos, detenga el servidor, borre control.db y vuelva
+a ejecutar python app.py.
+
+Opcional: otro puerto ->  python app.py 8080
+
+
+ESTRUCTURA
+----------
+  app.py              servidor HTTP, API JSON, reglas de negocio y datos de ejemplo
+  control.db          base de datos SQLite (se crea sola)
+  static/index.html   página principal con menú
+  static/app.js       pantallas y lógica (JavaScript puro, rutas #/)
+  static/styles.css   diseño (incluye estilos de impresión)
+
+
+REGLAS DE VALIDACIÓN
+--------------------
+- Todos los campos obligatorios deben llenarse.
+- CI: de 5 a 10 dígitos, con complemento opcional (ej. 1234567-1A).
+- La procedencia debe corresponder al mercado elegido.
+- Libras > 0. Se avisa si el peso supera en más de 20 % lo esperado (1 taque = 50 lb).
+- Una venta no puede superar las libras que quedan sin vender de esa entrada.
+- Una salida no puede superar lo vendido que aún no salió de esa venta.
+- La hoja de ruta se genera sola y es única (formato HR-AAAA-000001).
+
+
+DEMOSTRACIÓN SUGERIDA (2 MINUTOS)
+---------------------------------
+0:00  PANEL - Mostrar las tarjetas (entradas, vendido, salidas, precio promedio,
+      saldo en mercado), las barras "Coca enviada a cada departamento" (Santa Cruz
+      encabeza) y el gráfico de entradas por día. Cambiar el filtro a "Sacaba".
+
+0:20  ENTRADAS - Mercado "Villa Fátima (La Paz)", procedencia "Sud Yungas",
+      productor "Prueba Demo Mamani", CI 4567890, 3 taques -> las libras se ponen
+      solas en 150. Cambiar a 190 lb para mostrar el aviso de +20 %, volver a 150.
+      Registrar. (Opcional: escribir CI "12AB" para mostrar el error de validación.)
+
+0:45  VENTAS - Pulsar "Registrar una venta de esta entrada". Se muestra
+      "quedan 150 lb". Comprador "Comercial Demo", CI 7654321, 100 lb a 40 Bs:
+      el total se calcula en vivo (Bs 4.000,00). Intentar primero 200 lb para mostrar
+      que el sistema lo rechaza por superar el saldo. Registrar con 100 lb.
+
+1:10  SALIDAS - Pulsar "Despachar esta venta". Destino "Tarija", 100 lb,
+      placa 2345-KTR. Registrar -> se abre la HOJA DE RUTA.
+
+1:25  HOJA DE RUTA - Mostrar destino y cantidad en grande, el QR y pulsar
+      "Imprimir" (el menú no sale en la impresión; puede guardarse como PDF).
+
+1:40  VERIFICAR - Pulsar "Verificar" (o escanear el QR): aparece en verde
+      "HOJA DE RUTA VÁLIDA". Cambiar el último dígito del código y verificar:
+      aparece en rojo "NO VÁLIDA".
+
+1:50  REPORTES - Mostrar la tabla y barras por departamento con %, el movimiento
+      por mes y por procedencia. Descargar "CSV departamentos" y abrirlo en Excel.
+
+
+API (para pruebas)
+------------------
+GET  /api/config
+GET  /api/resumen?desde=AAAA-MM-DD&hasta=AAAA-MM-DD&mercado=
+GET  /api/entradas?q=&con_saldo=1
+GET  /api/ventas?q=&con_saldo=1
+GET  /api/salidas?departamento=
+GET  /api/hoja-ruta/HR-AAAA-000001
+GET  /api/exportar/departamentos.csv   y   /api/exportar/salidas.csv
+POST /api/entradas   /api/ventas   /api/salidas    (cuerpo JSON)
+Los errores de validación responden HTTP 400 con {"errores": [...]}.
