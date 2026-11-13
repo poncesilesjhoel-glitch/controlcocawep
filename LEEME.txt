@@ -18,6 +18,16 @@ REQUISITOS
   Sin internet, la hoja de ruta muestra el código en texto.
 
 
+USUARIOS
+--------
+- Sin iniciar sesión cualquiera puede ver el Panel, los Reportes y Verificar
+  hojas de ruta.
+- Para registrar entradas, ventas y salidas hay que iniciar sesión.
+- En la instalación local el primer usuario es:  admin / admin123
+  (cámbiela en "Mi cuenta"). El administrador crea más usuarios en
+  "Administrar usuarios" (menú con su nombre, arriba a la derecha).
+
+
 CÓMO EJECUTAR
 -------------
 1. Abra una terminal (PowerShell o Símbolo del sistema) en la carpeta control-coca.
@@ -34,10 +44,22 @@ a ejecutar python app.py.
 Opcional: otro puerto ->  python app.py 8080
 
 
+BASE DE DATOS
+-------------
+- En su computadora se usa SQLite (archivo control.db), sin instalar nada.
+- En internet (Render) se usa PostgreSQL (Neon) para que los datos NO se borren.
+  Basta con definir la variable de entorno DATABASE_URL con la cadena de conexión;
+  el programa crea las tablas solo. Requiere el conector pg8000 (requirements.txt).
+- Variables de entorno: DATABASE_URL, ADMIN_USUARIO (por defecto admin),
+  ADMIN_CLAVE, DATOS_DEMO=0 (para no cargar datos de ejemplo en una base vacía).
+
+
 ESTRUCTURA
 ----------
-  app.py              servidor HTTP, API JSON, reglas de negocio y datos de ejemplo
-  control.db          base de datos SQLite (se crea sola)
+  app.py              servidor HTTP, API JSON, usuarios, reglas de negocio y datos de ejemplo
+  control.db          base de datos SQLite local (se crea sola)
+  render.yaml         configuración para publicar en Render
+  requirements.txt    conector PostgreSQL (solo para la versión en internet)
   static/index.html   página principal con menú
   static/app.js       pantallas y lógica (JavaScript puro, rutas #/)
   static/styles.css   diseño (incluye estilos de impresión)
@@ -59,6 +81,8 @@ DEMOSTRACIÓN SUGERIDA (2 MINUTOS)
 0:00  PANEL - Mostrar las tarjetas (entradas, vendido, salidas, precio promedio,
       saldo en mercado), las barras "Coca enviada a cada departamento" (Santa Cruz
       encabeza) y el gráfico de entradas por día. Cambiar el filtro a "Sacaba".
+
+0:15  INICIAR SESIÓN con su usuario (arriba a la derecha).
 
 0:20  ENTRADAS - Mercado "Villa Fátima (La Paz)", procedencia "Sud Yungas",
       productor "Prueba Demo Mamani", CI 4567890, 3 taques -> las libras se ponen
@@ -93,5 +117,6 @@ GET  /api/ventas?q=&con_saldo=1
 GET  /api/salidas?departamento=
 GET  /api/hoja-ruta/HR-AAAA-000001
 GET  /api/exportar/departamentos.csv   y   /api/exportar/salidas.csv
-POST /api/entradas   /api/ventas   /api/salidas    (cuerpo JSON)
+POST /api/login  {usuario, clave}      POST /api/logout
+POST /api/entradas   /api/ventas   /api/salidas    (cuerpo JSON, requieren sesión)
 Los errores de validación responden HTTP 400 con {"errores": [...]}.

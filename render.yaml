@@ -10,3 +10,9 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.10
+      # Conexión PostgreSQL permanente (por ejemplo Neon). Se configura en el panel de Render.
+      - key: DATABASE_URL
+        sync: false
+      # Contraseña del usuario "admin" creado la primera vez.
+      - key: ADMIN_CLAVE
+        sync: false
