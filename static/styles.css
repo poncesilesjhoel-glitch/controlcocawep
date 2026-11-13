@@ -517,3 +517,180 @@ tfoot td { font-weight: 700; background: #F7F5EC; }
   .sello-emitida { transform: rotate(-6deg); }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* =====================================================================
+   Versión 3: hojas de coca animadas, roles, estados y pantallas nuevas
+   ===================================================================== */
+
+/* ---------- Hoja de coca (símbolo SVG) ---------- */
+.hc-lamina { fill: var(--hc-fill, #2E7D32); }
+.hc-nervio { stroke: var(--hc-nervio, #D9EED8); stroke-width: 2.4; fill: none; stroke-linecap: round; }
+.hc-linea { stroke: var(--hc-linea, rgba(217, 238, 216, .75)); stroke-width: 1.5; fill: none; stroke-linecap: round; }
+.marca-logo svg { --hc-fill: #2E7D32; --hc-nervio: #D9A441; --hc-linea: rgba(217, 164, 65, .7); }
+
+/* ---------- Pantalla de carga ---------- */
+.splash {
+  position: fixed; inset: 0; z-index: 200; background: radial-gradient(circle at 50% 42%, #1F4430 0%, #15301F 60%, #0E2216 100%);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 34px; cursor: pointer;
+  transition: opacity .6s ease, visibility .6s;
+}
+.splash[hidden] { display: none; }
+.splash.saliendo { opacity: 0; visibility: hidden; }
+.flor { position: relative; width: 240px; height: 240px; }
+.petalo {
+  position: absolute; left: 50%; top: 50%; width: 50px; height: 92px; margin: -46px 0 0 -25px;
+  transform-origin: 50% 50%; opacity: 0;
+  animation: abrir-petalo 1.15s cubic-bezier(.2, .9, .25, 1.1) forwards; animation-delay: var(--d, 0s);
+}
+.petalo svg { width: 100%; height: 100%; display: block; filter: drop-shadow(0 4px 8px rgba(0, 0, 0, .3)); }
+.petalo.chico { width: 30px; height: 56px; margin: -28px 0 0 -15px; }
+.petalo.chico svg { --hc-fill: #43A047; }
+.petalo.oro svg { --hc-fill: #D9A441; --hc-nervio: #FFF3D6; --hc-linea: rgba(255, 243, 214, .7); }
+@keyframes abrir-petalo {
+  0% { opacity: 0; transform: rotate(calc(var(--a) - 160deg)) translateY(0) scale(.1); }
+  60% { opacity: 1; }
+  100% { opacity: 1; transform: rotate(var(--a)) translateY(var(--r, -66px)) scale(1); }
+}
+.flor-centro { position: absolute; left: 50%; top: 50%; width: 26px; height: 26px; margin: -13px; border-radius: 50%;
+  background: #D9A441; box-shadow: 0 0 0 6px rgba(217, 164, 65, .25), 0 0 30px rgba(217, 164, 65, .5);
+  transform: scale(0); animation: centro .5s .9s cubic-bezier(.3, 1.6, .5, 1) forwards; }
+@keyframes centro { to { transform: scale(1); } }
+.flor.girar { animation: girar-flor 6s linear infinite; }
+@keyframes girar-flor { to { transform: rotate(360deg); } }
+.splash-titulo { text-align: center; color: #fff; opacity: 0; transform: translateY(10px); animation: titulo-in .8s 1s ease forwards; padding: 0 16px; }
+.splash-titulo strong { display: block; font-size: 1.6rem; letter-spacing: .01em; }
+.splash-titulo span { color: #D9A441; font-size: .95rem; letter-spacing: .06em; text-transform: uppercase; }
+@keyframes titulo-in { to { opacity: 1; transform: none; } }
+.splash-saltar { position: absolute; bottom: 26px; color: rgba(255, 255, 255, .45); font-size: .8rem; opacity: 0; animation: aparecer .5s 1.2s forwards; }
+.splash.mini { background: rgba(21, 48, 31, .9); gap: 0; }
+.splash.mini .splash-titulo, .splash.mini .splash-saltar { display: none; }
+
+/* ---------- Lluvia de hojas (login) y hojas de fondo ---------- */
+.lluvia { position: fixed; inset: 0; pointer-events: none; overflow: hidden; z-index: 0; }
+.cae { position: absolute; top: 0; will-change: transform; animation: caer var(--dur, 14s) linear infinite; animation-delay: var(--del, 0s); opacity: var(--op, .3); }
+.cae svg { display: block; width: 100%; height: 100%; animation: balanceo var(--bal, 3s) ease-in-out infinite alternate; }
+@keyframes caer {
+  0% { transform: translate3d(0, -18vh, 0) rotate(0deg); }
+  100% { transform: translate3d(var(--dx, 40px), 118vh, 0) rotate(var(--giro, 360deg)); }
+}
+@keyframes balanceo { from { transform: translateX(-14px) rotate(-14deg); } to { transform: translateX(14px) rotate(14deg); } }
+.fondo-hojas { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+.fondo-hojas .cae svg { --hc-fill: #2E7D32; --hc-nervio: #F6F4EC; --hc-linea: rgba(246, 244, 236, .6); }
+.contenido, .pie { position: relative; z-index: 1; }
+
+/* ---------- Login ---------- */
+body.sin-sesion { background: linear-gradient(160deg, #15301F 0%, #1F4430 55%, #2E5E3A 100%); }
+body.sin-sesion .barra, body.sin-sesion .pie, body.sin-sesion .fondo-hojas { display: none; }
+body.sin-sesion .contenido { max-width: none; padding: 0; display: flex; }
+.login-pantalla { min-height: 100vh; width: 100%; display: grid; place-items: center; padding: 24px 16px; position: relative; }
+.login-pantalla .lluvia .cae svg { --hc-fill: #43A047; --hc-nervio: #E7F5E6; --hc-linea: rgba(231, 245, 230, .7); }
+.login-pantalla .lluvia .cae.oro svg { --hc-fill: #D9A441; --hc-nervio: #FFF6DE; }
+.login-marca { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; color: #fff; justify-content: center; text-align: left; }
+.login-marca svg { width: 30px; height: 54px; flex-shrink: 0; --hc-fill: #D9A441; --hc-nervio: #FFF6DE; }
+.login-marca strong { font-size: 1.15rem; display: block; }
+.login-marca small { color: #B9CDBE; }
+.login-caja { width: 100%; max-width: 420px; position: relative; z-index: 2; }
+.login-tarjeta { max-width: none; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+.login-cab .hoja-logo { width: 70px; height: 128px; right: 12px; top: -18px; --hc-fill: #fff; --hc-nervio: #2E7D32; --hc-linea: rgba(46,125,50,.5); }
+
+/* ---------- Barra superior: usuario ---------- */
+.chip-usuario .info { display: flex; flex-direction: column; line-height: 1.15; text-align: left; }
+.chip-usuario .info small { color: #B9CDBE; font-size: .7rem; }
+.chip-rol { display: inline-block; font-size: .66rem; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; background: rgba(217, 164, 65, .22); color: #F3CF7A; margin-left: 4px; }
+
+/* ---------- Calidades y estados ---------- */
+.cal { display: inline-flex; align-items: center; gap: 5px; padding: 2px 9px; border-radius: 999px; font-size: .76rem; font-weight: 800; white-space: nowrap; }
+.cal::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+.cal.c1 { background: #FBF1DC; color: #9A6B12; }
+.cal.c2 { background: #E6F1E6; color: #1B5E20; }
+.cal.c3 { background: #EFEAE3; color: #6D5A45; }
+.estado { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .74rem; font-weight: 800; letter-spacing: .03em; }
+.estado.VIGENTE { background: #E3F2E4; color: #1B5E20; }
+.estado.VENCIDA { background: #F1ECE0; color: #7A5A1E; }
+.estado.ANULADA { background: var(--rojo-claro); color: var(--rojo); }
+.selector-calidad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.selector-calidad label { margin: 0; cursor: pointer; position: relative; }
+.selector-calidad input { position: absolute; opacity: 0; pointer-events: none; }
+.selector-calidad span { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 6px; border: 1.5px solid #D6D1C1; border-radius: 12px; background: #FFFEFA; font-weight: 700; transition: all var(--rapido); text-align: center; }
+.selector-calidad span svg { width: 16px; height: 28px; transition: transform .3s cubic-bezier(.3, 1.6, .5, 1); }
+.selector-calidad .q1 svg { --hc-fill: #D9A441; }
+.selector-calidad .q2 svg { --hc-fill: #2E7D32; }
+.selector-calidad .q3 svg { --hc-fill: #8D7A62; }
+.selector-calidad input:checked + span { border-color: var(--verde); background: var(--verde-claro); box-shadow: 0 0 0 3px rgba(46, 125, 50, .15); }
+.selector-calidad input:checked + span svg { transform: rotate(-20deg) scale(1.2); }
+.selector-calidad input:focus-visible + span { outline: 2px solid var(--verde); }
+.selector-calidad.invalido span { border-color: var(--rojo); }
+.ref-precio { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: #F3F7FB; border: 1px solid #D5E3F0; font-size: .86rem; color: #1F4E79; }
+.ref-precio strong { font-size: 1.05rem; }
+.campo-fijo { padding: 10px 12px; border-radius: 10px; background: #EEEBE0; font-weight: 600; color: var(--oscuro); }
+
+/* ---------- Precio de hoy por calidad ---------- */
+.precios-hoy { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.precio-cal { border-radius: 14px; padding: 14px; border: 1px solid var(--borde); background: #FFFEFA; position: relative; overflow: hidden; }
+.precio-cal svg { position: absolute; right: -4px; bottom: -14px; width: 40px; height: 74px; opacity: .2; transform: rotate(25deg); }
+.precio-cal.c1 svg { --hc-fill: #D9A441; }
+.precio-cal.c3 svg { --hc-fill: #8D7A62; }
+.precio-cal .v { font-size: 1.35rem; font-weight: 800; color: var(--oscuro); margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+.precio-cal small { color: var(--suave); }
+
+/* ---------- Modal ---------- */
+.modal-fondo { position: fixed; inset: 0; z-index: 150; background: rgba(14, 34, 22, .55); display: grid; place-items: center; padding: 16px; animation: aparecer .2s both; }
+.modal-fondo[hidden] { display: none; }
+.modal { background: #fff; border-radius: 18px; width: 100%; max-width: 480px; box-shadow: var(--sombra-alta); padding: 22px; animation: zoom .25s both; max-height: calc(100vh - 32px); overflow: auto; }
+.modal h2 { margin-bottom: 6px; }
+.modal-acciones { display: flex; gap: 10px; justify-content: flex-end; margin-top: 18px; flex-wrap: wrap; }
+
+/* ---------- Verificación (tranca, pensado para celular) ---------- */
+.tranca { max-width: 720px; margin: 0 auto; }
+.tranca .verif-form { flex-direction: column; gap: 12px; }
+.tranca .verif-form input { font-size: 1.35rem; padding: 16px; text-align: center; }
+.tranca .verif-form input.puesto { font-family: inherit; text-transform: none; letter-spacing: normal; font-size: 1rem; text-align: left; }
+.btn-grande { font-size: 1.2rem; padding: 18px; border-radius: 14px; width: 100%; }
+.resultado.grande { padding: 26px 22px; text-align: center; }
+.resultado.grande .sello-wrap { justify-content: center; flex-direction: column; }
+.resultado.grande .sello { font-size: 2rem; }
+.resultado.grande .icono { width: 84px; height: 84px; font-size: 2.8rem; }
+.resultado .motivo { font-size: 1.1rem; font-weight: 600; margin: 14px 0 0; }
+.resultado.grande .dl { text-align: left; }
+.cifras-tranca { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 16px; }
+.cifras-tranca div { background: rgba(255, 255, 255, .8); border-radius: 12px; padding: 10px; }
+.cifras-tranca small { display: block; color: var(--suave); font-size: .72rem; text-transform: uppercase; letter-spacing: .05em; font-weight: 700; }
+.cifras-tranca strong { font-size: 1.45rem; color: var(--oscuro); }
+
+/* ---------- Hoja de ruta: estado ---------- */
+.sello-emitida.VENCIDA { border-color: #8A6A2A; color: #8A6A2A; }
+.sello-emitida.ANULADA { border-color: var(--rojo); color: var(--rojo); }
+.hoja.anulada .destaque > div { border-color: var(--rojo); }
+.hoja .vigencia { display: flex; gap: 16px; flex-wrap: wrap; font-size: .86rem; margin-top: 6px; }
+.aviso-anulada { background: var(--rojo-claro); color: var(--rojo); border: 1px solid #F2B8B5; border-radius: 10px; padding: 10px 14px; margin-top: 14px; font-weight: 600; }
+
+/* ---------- Varios ---------- */
+.tiles-estado { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.tile { border-radius: 14px; padding: 14px; text-align: center; }
+.tile strong { display: block; font-size: 1.6rem; }
+.tile.VIGENTE { background: #E3F2E4; color: #1B5E20; }
+.tile.VENCIDA { background: #F1ECE0; color: #7A5A1E; }
+.tile.ANULADA { background: var(--rojo-claro); color: var(--rojo); }
+.bitacora-accion { font-family: Consolas, monospace; font-size: .74rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: #EEF4FB; color: #1F4E79; white-space: nowrap; }
+.bitacora-accion.LOGIN_FALLIDO, .bitacora-accion.USUARIO_BLOQUEADO, .bitacora-accion.LOGIN_BLOQUEADO, .bitacora-accion.ANULACION { background: var(--rojo-claro); color: var(--rojo); }
+.bitacora-accion.VERIFICACION { background: var(--ocre-claro); color: #7A5200; }
+.bitacora-accion.ENTRADA, .bitacora-accion.VENTA, .bitacora-accion.SALIDA { background: var(--verde-claro); color: #1B5E20; }
+.hojas-deco svg { --hc-fill: #fff; --hc-nervio: #15301F; --hc-linea: rgba(21, 48, 31, .5); height: auto; }
+.grafico .linea-c { fill: none; stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.grafico.listo .linea-c { animation: trazo 1.8s .2s ease forwards; }
+
+@media (max-width: 640px) {
+  .precios-hoy, .tiles-estado { grid-template-columns: 1fr; }
+  .chip-usuario .info small { display: none; }
+  .flor { width: 200px; height: 200px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .lluvia, .fondo-hojas { display: none; }
+  .petalo { opacity: 1; animation: none; transform: rotate(var(--a)) translateY(var(--r, -66px)); }
+  .flor-centro { transform: none; }
+  .splash-titulo, .splash-saltar { opacity: 1; transform: none; }
+}
+@media print {
+  .splash, .lluvia, .fondo-hojas, .modal-fondo { display: none !important; }
+  body, body.sin-sesion { background: #fff !important; }
+}

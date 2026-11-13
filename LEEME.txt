@@ -1,122 +1,147 @@
-SISTEMA DE CONTROL DE COMERCIALIZACIÓN DE LA HOJA DE COCA
+SISTEMA DE CONTROL DE COMERCIALIZACIÓN DE LA HOJA DE COCA  (versión 3)
 Proyecto académico - Bolivia
-==========================================================
+=====================================================================
 
-Aplicación web local que registra el movimiento de hoja de coca en los mercados
-autorizados (Villa Fátima - La Paz y Sacaba - Cochabamba): lo que ENTRA, lo que se
-VENDE y lo que SALE hacia cada DEPARTAMENTO, con inventario, hojas de ruta con QR y
-reportes. Todos los datos de ejemplo son ficticios.
+Página web para controlar la hoja de coca en los galpones/mercados autorizados
+(Villa Fátima en La Paz y Sacaba en Cochabamba):
+  - lo que ENTRA con cada productor (con su calidad: Primera, Segunda o Tercera),
+  - lo que se VENDE a los compradores (al precio que ellos acuerdan),
+  - lo que SALE hacia cada DEPARTAMENTO, con hoja de ruta, código QR y vencimiento,
+  - y la VERIFICACIÓN de esa hoja de ruta por la policía en las trancas.
+Todos los datos de ejemplo son ficticios.
 
 
 REQUISITOS
 ----------
 - Python 3.8 o superior (https://www.python.org/downloads/).
-  En Windows marque la casilla "Add python.exe to PATH" al instalar.
-- No se instala ninguna librería: solo se usa la biblioteca estándar de Python.
-- Un navegador moderno (Chrome, Edge, Firefox).
-- Internet es opcional: solo se usa para dibujar el código QR (qrcodejs desde cdnjs).
-  Sin internet, la hoja de ruta muestra el código en texto.
-
-
-USUARIOS
---------
-- Sin iniciar sesión cualquiera puede ver el Panel, los Reportes y Verificar
-  hojas de ruta.
-- Para registrar entradas, ventas y salidas hay que iniciar sesión.
-- En la instalación local el primer usuario es:  admin / admin123
-  (cámbiela en "Mi cuenta"). El administrador crea más usuarios en
-  "Administrar usuarios" (menú con su nombre, arriba a la derecha).
+  En Windows marque "Add python.exe to PATH" al instalar.
+- No se instala nada: solo se usa la biblioteca estándar de Python.
+- Navegador moderno (Chrome, Edge, Firefox). En el celular también funciona.
+- Internet solo para dibujar el código QR. Sin internet se muestra el código en texto.
 
 
 CÓMO EJECUTAR
 -------------
-1. Abra una terminal (PowerShell o Símbolo del sistema) en la carpeta control-coca.
-2. Ejecute:
-       python app.py
-   (en Windows también puede usar:  py app.py)
-3. Abra en el navegador:  http://localhost:8000
-4. Para detener el servidor presione Ctrl+C en la terminal.
+1. Abra una terminal en la carpeta control-coca.
+2. Ejecute:      python app.py        (en Windows también:  py app.py)
+3. Abra:         http://localhost:8000
+4. Para detener: Ctrl+C en la terminal.
 
-La primera vez se crea el archivo control.db con 60 días de movimientos de ejemplo.
-Para empezar de cero con datos nuevos, detenga el servidor, borre control.db y vuelva
-a ejecutar python app.py.
+La primera vez se crea control.db con usuarios de prueba y 60 días de movimientos.
+Para empezar de cero: detenga el servidor, borre control.db y vuelva a ejecutar.
+Si ya existía una base de una versión anterior, se MIGRA sola sin borrar datos
+(se controla con PRAGMA user_version). La base de la versión 2 quedó guardada como
+control_v2_respaldo.db.
 
-Opcional: otro puerto ->  python app.py 8080
+Pruebas automáticas:   python tests.py     (usa una base temporal; no toca control.db)
 
 
-BASE DE DATOS
--------------
-- En su computadora se usa SQLite (archivo control.db), sin instalar nada.
-- En internet (Render) se usa PostgreSQL (Neon) para que los datos NO se borren.
-  Basta con definir la variable de entorno DATABASE_URL con la cadena de conexión;
-  el programa crea las tablas solo. Requiere el conector pg8000 (requirements.txt).
-- Variables de entorno: DATABASE_URL, ADMIN_USUARIO (por defecto admin),
-  ADMIN_CLAVE, DATOS_DEMO=0 (para no cargar datos de ejemplo en una base vacía).
+USUARIOS
+--------
+Primer ingreso del administrador:
+    admin / admin123   -> el sistema OBLIGA a cambiar la contraseña al entrar.
+
+Usuarios de prueba  (SOLO PARA LA DEMOSTRACIÓN, contraseña: prueba123):
+    operador_vf   Operador del mercado Villa Fátima (La Paz)
+    operador_sc   Operador del mercado Sacaba (Cochabamba)
+    supervisor1   Supervisor (todos los mercados)
+    control1      Controlador (policía en la tranca)
+En un uso real, desactívelos desde Administración > Usuarios.
+
+Seguridad:
+- Contraseñas guardadas con PBKDF2-SHA256 (sal aleatoria, 200.000 iteraciones).
+- Sesión con cookie HttpOnly y SameSite=Strict; se cierra sola tras 30 minutos sin uso.
+- 5 intentos fallidos seguidos bloquean el usuario 5 minutos.
+- Todos los permisos se validan en el SERVIDOR (una API ajena responde 403).
+- Productores y compradores NO tienen cuenta: el comprador recibe la hoja de ruta
+  impresa o en su celular.
+
+
+QUÉ HACE CADA ROL
+-----------------
+Administrador (gerente)
+    Todo lo anterior, más: Usuarios (crear, editar, activar/desactivar, restablecer
+    contraseña), Bitácora, Configuración (nombres de calidades, libras por taque,
+    horas de vigencia) y anular hojas de ruta (con motivo obligatorio).
+    No se puede desactivar al último administrador activo.
+Operador
+    Registra entradas, ventas y salidas SOLO de su mercado y ve el panel de su mercado.
+Supervisor
+    Ve panel, reportes y hojas de ruta de todos los mercados y descarga Excel (CSV).
+    No registra nada.
+Controlador
+    Solo "Verificar hoja de ruta" (pantalla grande, pensada para celular).
+
+
+REGLAS PRINCIPALES
+------------------
+- Entrada: fecha y hora automáticas; CI de 5 a 10 dígitos con complemento opcional
+  (ej. 1234567-1A); la procedencia debe ser del mercado; 1 taque ≈ 50 lb (editable);
+  aviso si el peso se aleja más de 20 %, error si no es razonable.
+- Venta: el precio NO lo fija nadie; lo acuerdan productor y comprador. El sistema
+  muestra como referencia el precio promedio del día de esa calidad (ponderado por
+  libras; si hoy no hay ventas, el del último día con ventas) y AVISA si el precio
+  se aleja más de 30 %. No se puede vender más de lo que le queda a la entrada.
+- Salida: transportista y su CI obligatorios; placa opcional (3 o 4 dígitos + 3 letras,
+  ej. 2345ABC). No se puede despachar más de lo vendido que sigue en el galpón.
+- Hoja de ruta: código único correlativo HR-AAAA-000001, QR hacia /#/verificar/{código},
+  vence a las 72 horas (configurable). Estados: VIGENTE, VENCIDA o ANULADA.
+- Cada verificación queda registrada (código, fecha y hora, controlador, resultado y
+  puesto). Todo inicio de sesión, intento fallido, registro, anulación, cambio de
+  usuario o de configuración queda en la Bitácora.
+
+
+DEMOSTRACIÓN SUGERIDA (3 MINUTOS)
+---------------------------------
+0:00  PANTALLA DE CARGA: al abrir http://localhost:8000 las hojas de coca se abren como
+      una flor y aparece el nombre del sistema (un clic la salta). Luego el login con
+      hojas que caen.
+0:15  LOGIN ADMIN: admin / admin123. El sistema pide cambiar la contraseña
+      (por ejemplo a Gerente2026). Se ve el panel con "Precio promedio de hoy por calidad".
+0:40  ENTRADA: Entradas > Villa Fátima, Sud Yungas, productor "Prueba Demo Mamani",
+      CI 4567890, calidad PRIMERA (aparece el precio de referencia), 3 taques
+      (150 lb automáticas). Registrar.
+1:00  VENTA: "Registrar una venta de esta entrada". Muestra la calidad y la referencia.
+      Comprador "Comercial Demo", CI 7654321, 100 lb, precio acordado = referencia.
+      (Opcional: escribir el doble de precio para ver el aviso del 30 %.)
+1:20  SALIDA: "Despachar esta venta" > destino TARIJA, 100 lb, transportista
+      "Juan Chofer Pérez", CI 3344556, placa 2345ABC. Se abre la HOJA DE RUTA.
+1:35  IMPRIMIR: botón Imprimir (sin menú ni animaciones; se puede guardar en PDF).
+      Copie el código HR-... de la hoja.
+1:50  LOGIN CONTROLADOR: Cerrar sesión > control1 / prueba123 > se abre Verificar.
+      Escanee el QR con el celular o escriba el código: pantalla VERDE
+      "HOJA DE RUTA VÁLIDA" con destino, libras, calidad, transportista y placa.
+2:15  ADMIN ANULA: Cerrar sesión > admin > Hojas de ruta > buscar el código > Anular
+      (motivo: "Prueba de anulación").
+2:30  VERIFICAR OTRA VEZ como control1: pantalla ROJA "NO VÁLIDA - fue ANULADA".
+2:45  REPORTES (admin o supervisor1): por departamento, por calidad, precio diario por
+      calidad, hojas por estado y verificaciones; descargar los CSV para Excel.
+2:55  BITÁCORA (admin > Administración > Bitácora): se ven el login, la entrada, la venta,
+      la salida, la anulación y las dos verificaciones.
 
 
 ESTRUCTURA
 ----------
-  app.py              servidor HTTP, API JSON, usuarios, reglas de negocio y datos de ejemplo
-  control.db          base de datos SQLite local (se crea sola)
-  render.yaml         configuración para publicar en Render
-  requirements.txt    conector PostgreSQL (solo para la versión en internet)
-  static/index.html   página principal con menú
+  app.py              servidor, API JSON, usuarios, permisos, reglas, migración y datos
+  tests.py            pruebas automáticas (unittest)
+  control.db          base de datos SQLite (se crea sola)
+  static/index.html   página principal
   static/app.js       pantallas y lógica (JavaScript puro, rutas #/)
-  static/styles.css   diseño (incluye estilos de impresión)
+  static/styles.css   diseño, animaciones de hojas e impresión
+  render.yaml         configuración opcional para publicar en Render
+  requirements.txt    solo para la versión en internet con PostgreSQL (pg8000);
+                      en su computadora NO hace falta instalar nada.
 
 
-REGLAS DE VALIDACIÓN
---------------------
-- Todos los campos obligatorios deben llenarse.
-- CI: de 5 a 10 dígitos, con complemento opcional (ej. 1234567-1A).
-- La procedencia debe corresponder al mercado elegido.
-- Libras > 0. Se avisa si el peso supera en más de 20 % lo esperado (1 taque = 50 lb).
-- Una venta no puede superar las libras que quedan sin vender de esa entrada.
-- Una salida no puede superar lo vendido que aún no salió de esa venta.
-- La hoja de ruta se genera sola y es única (formato HR-AAAA-000001).
-
-
-DEMOSTRACIÓN SUGERIDA (2 MINUTOS)
----------------------------------
-0:00  PANEL - Mostrar las tarjetas (entradas, vendido, salidas, precio promedio,
-      saldo en mercado), las barras "Coca enviada a cada departamento" (Santa Cruz
-      encabeza) y el gráfico de entradas por día. Cambiar el filtro a "Sacaba".
-
-0:15  INICIAR SESIÓN con su usuario (arriba a la derecha).
-
-0:20  ENTRADAS - Mercado "Villa Fátima (La Paz)", procedencia "Sud Yungas",
-      productor "Prueba Demo Mamani", CI 4567890, 3 taques -> las libras se ponen
-      solas en 150. Cambiar a 190 lb para mostrar el aviso de +20 %, volver a 150.
-      Registrar. (Opcional: escribir CI "12AB" para mostrar el error de validación.)
-
-0:45  VENTAS - Pulsar "Registrar una venta de esta entrada". Se muestra
-      "quedan 150 lb". Comprador "Comercial Demo", CI 7654321, 100 lb a 40 Bs:
-      el total se calcula en vivo (Bs 4.000,00). Intentar primero 200 lb para mostrar
-      que el sistema lo rechaza por superar el saldo. Registrar con 100 lb.
-
-1:10  SALIDAS - Pulsar "Despachar esta venta". Destino "Tarija", 100 lb,
-      placa 2345-KTR. Registrar -> se abre la HOJA DE RUTA.
-
-1:25  HOJA DE RUTA - Mostrar destino y cantidad en grande, el QR y pulsar
-      "Imprimir" (el menú no sale en la impresión; puede guardarse como PDF).
-
-1:40  VERIFICAR - Pulsar "Verificar" (o escanear el QR): aparece en verde
-      "HOJA DE RUTA VÁLIDA". Cambiar el último dígito del código y verificar:
-      aparece en rojo "NO VÁLIDA".
-
-1:50  REPORTES - Mostrar la tabla y barras por departamento con %, el movimiento
-      por mes y por procedencia. Descargar "CSV departamentos" y abrirlo en Excel.
-
-
-API (para pruebas)
-------------------
-GET  /api/config
-GET  /api/resumen?desde=AAAA-MM-DD&hasta=AAAA-MM-DD&mercado=
-GET  /api/entradas?q=&con_saldo=1
-GET  /api/ventas?q=&con_saldo=1
-GET  /api/salidas?departamento=
-GET  /api/hoja-ruta/HR-AAAA-000001
-GET  /api/exportar/departamentos.csv   y   /api/exportar/salidas.csv
-POST /api/login  {usuario, clave}      POST /api/logout
-POST /api/entradas   /api/ventas   /api/salidas    (cuerpo JSON, requieren sesión)
-Los errores de validación responden HTTP 400 con {"errores": [...]}.
+API (resumen)
+-------------
+POST /api/login · POST /api/logout · GET /api/sesion · POST /api/clave
+GET  /api/config · GET /api/resumen?desde=&hasta=&mercado=&calidad=
+GET  /api/precio-referencia?calidad=&mercado=
+GET/POST /api/entradas · /api/ventas · /api/salidas
+GET  /api/hoja-ruta/{código} · GET /api/hojas?estado=&q= · POST /api/hojas/{código}/anular
+POST /api/verificar {codigo, puesto}
+GET  /api/exportar/departamentos.csv · calidad.csv · salidas.csv   (con BOM para Excel)
+GET/POST /api/usuarios · POST /api/usuarios/{id} · POST /api/usuarios/{id}/clave
+GET  /api/bitacora · POST /api/config
+Errores: HTTP 400/401/403 con {"errores": [...]}.

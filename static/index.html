@@ -6,31 +6,44 @@
   <meta name="theme-color" content="#15301F">
   <title>Control de la Hoja de Coca</title>
   <link rel="stylesheet" href="/styles.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M16 2C8 9 6 18 16 30C26 18 24 9 16 2Z' fill='%232E7D32'/%3E%3Cpath d='M16 6V28' stroke='%23F6F4EC' stroke-width='1.5'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-30 -55 60 110'%3E%3Cpath d='M0-50C22-35 24 25 0 50-24 25-22-35 0-50Z' fill='%232E7D32'/%3E%3Cpath d='M0-46V46' stroke='%23F6F4EC' stroke-width='3'/%3E%3C/svg%3E">
 </head>
-<body>
+<body class="sin-sesion">
+  <!-- Hoja de coca: forma ovalada, nervadura central y las dos líneas curvas laterales -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="hoja-coca" viewBox="-30 -55 60 110">
+      <path class="hc-lamina" d="M0,-50 C21,-36 25,22 0,50 C-25,22 -21,-36 0,-50 Z"/>
+      <path class="hc-nervio" d="M0,-46 L0,47"/>
+      <path class="hc-linea" d="M-7,-36 C-15,-10 -15,16 -6,38"/>
+      <path class="hc-linea" d="M7,-36 C15,-10 15,16 6,38"/>
+    </symbol>
+  </svg>
+
+  <!-- Pantalla de carga -->
+  <div id="splash" class="splash no-print" hidden>
+    <div class="flor" id="florSplash"></div>
+    <div class="splash-titulo">
+      <strong>Control de la Hoja de Coca</strong>
+      <span>Sistema de Control de Comercialización</span>
+    </div>
+    <small class="splash-saltar">Toque para continuar</small>
+  </div>
+
+  <!-- Hojas de fondo (muy suaves) -->
+  <div id="fondoHojas" class="fondo-hojas no-print" aria-hidden="true"></div>
+
   <div id="progreso" class="progreso no-print"></div>
 
-  <header class="barra no-print">
+  <header class="barra no-print" id="barra">
     <a class="marca" href="#/">
-      <span class="marca-logo"><svg viewBox="0 0 32 32" aria-hidden="true"><path d="M16 2C8 9 6 18 16 30C26 18 24 9 16 2Z" fill="#2E7D32"/><path d="M16 6V28M16 13l-4-3M16 18l5-4M16 23l-4-3" stroke="#D9A441" stroke-width="1.4" fill="none" stroke-linecap="round"/></svg></span>
+      <span class="marca-logo"><svg viewBox="0 0 60 110"><use href="#hoja-coca"/></svg></span>
       <span class="marca-txt"><strong>Control de la Hoja de Coca</strong><small>Sistema de Control de Comercialización</small></span>
     </a>
     <button class="menu-btn" id="menuBtn" aria-label="Abrir menú" aria-expanded="false"><span></span><span></span><span></span></button>
-    <nav id="menu">
-      <a href="#/" data-r="">Panel</a>
-      <a href="#/entradas" data-r="entradas" data-priv>Entradas</a>
-      <a href="#/ventas" data-r="ventas" data-priv>Ventas</a>
-      <a href="#/salidas" data-r="salidas" data-priv>Salidas</a>
-      <a href="#/verificar" data-r="verificar">Verificar</a>
-      <a href="#/reportes" data-r="reportes">Reportes</a>
-      <div id="zonaUsuario" class="zona-usuario"></div>
-    </nav>
+    <nav id="menu"></nav>
   </header>
 
-  <main id="app" class="contenido" tabindex="-1">
-    <div class="cargador"><div class="hoja-giro"></div><p>Cargando…</p></div>
-  </main>
+  <main id="app" class="contenido" tabindex="-1"></main>
 
   <footer class="pie no-print">
     <span>Sistema de Control de Comercialización de la Hoja de Coca</span>
@@ -38,6 +51,7 @@
   </footer>
 
   <div id="toasts" class="toasts no-print" aria-live="polite"></div>
+  <div id="modal" class="modal-fondo no-print" hidden></div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   <script src="/app.js"></script>
