@@ -36,6 +36,23 @@ control_v2_respaldo.db.
 Pruebas automáticas:   python tests.py     (usa una base temporal; no toca control.db)
 
 
+PÁGINA PÚBLICA (sin iniciar sesión)
+-----------------------------------
+Después de la pantalla de carga se abre una página pública con:
+1. Precio del día: precio promedio por libra de hoy de cada calidad (Primera, Segunda y
+   Tercera) en cada mercado, con la fecha. Si hoy aún no hay ventas de esa calidad, se
+   muestra el del último día con ventas. Incluye la variación frente al día anterior y
+   un pequeño gráfico de los últimos días.
+2. Consultar mi hoja de ruta: el comprador escribe el código y su CI y ve el estado,
+   destino, libras, calidad, placa y vencimiento (con cuenta regresiva), y puede volver
+   a imprimirla con su QR. Solo se muestra si el código y el CI coinciden; tras 10
+   consultas sin resultado desde el mismo equipo hay que esperar 15 minutos. Cada
+   consulta queda en la Bitácora.
+3. Botón "Ingreso del personal", que lleva al inicio de sesión.
+Todo lo demás (panel, entradas, ventas, salidas, reportes, usuarios y bitácora) sigue
+siendo privado. El personal puede ver la página pública desde su menú.
+
+
 USUARIOS
 --------
 Primer ingreso del administrador:
@@ -94,8 +111,8 @@ REGLAS PRINCIPALES
 DEMOSTRACIÓN SUGERIDA (3 MINUTOS)
 ---------------------------------
 0:00  PANTALLA DE CARGA: al abrir http://localhost:8000 las hojas de coca se abren como
-      una flor y aparece el nombre del sistema (un clic la salta). Luego el login con
-      hojas que caen.
+      una flor y aparece el nombre del sistema (un clic la salta). Luego la PÁGINA
+      PÚBLICA con el precio del día; pulse "Ingreso del personal" (login con hojas que caen).
 0:15  LOGIN ADMIN: admin / admin123. El sistema pide cambiar la contraseña
       (por ejemplo a Gerente2026). Se ve el panel con "Precio promedio de hoy por calidad".
 0:40  ENTRADA: Entradas > Villa Fátima, Sud Yungas, productor "Prueba Demo Mamani",
@@ -107,7 +124,8 @@ DEMOSTRACIÓN SUGERIDA (3 MINUTOS)
 1:20  SALIDA: "Despachar esta venta" > destino TARIJA, 100 lb, transportista
       "Juan Chofer Pérez", CI 3344556, placa 2345ABC. Se abre la HOJA DE RUTA.
 1:35  IMPRIMIR: botón Imprimir (sin menú ni animaciones; se puede guardar en PDF).
-      Copie el código HR-... de la hoja.
+      Copie el código HR-... de la hoja. (Extra: cierre sesión y, en la página pública,
+      consulte esa hoja con el CI del comprador 7654321.)
 1:50  LOGIN CONTROLADOR: Cerrar sesión > control1 / prueba123 > se abre Verificar.
       Escanee el QR con el celular o escriba el código: pantalla VERDE
       "HOJA DE RUTA VÁLIDA" con destino, libras, calidad, transportista y placa.
@@ -135,6 +153,7 @@ ESTRUCTURA
 
 API (resumen)
 -------------
+Públicas: GET /api/publico/precios · POST /api/publico/hoja {codigo, ci}
 POST /api/login · POST /api/logout · GET /api/sesion · POST /api/clave
 GET  /api/config · GET /api/resumen?desde=&hasta=&mercado=&calidad=
 GET  /api/precio-referencia?calidad=&mercado=

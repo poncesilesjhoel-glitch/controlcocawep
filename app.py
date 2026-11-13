@@ -600,6 +600,81 @@ def precio_referencia(bd, mercado, calidad):
     return {"precio": round(r["t"] / r["lb"], 2), "fecha": ultima, "es_hoy": False, "libras": round(r["lb"], 2)}
 
 
+def _precio_en_fecha(bd, mercado, calidad, fecha):
+    r = bd.uno("SELECT SUM(v.total) AS t, SUM(v.libras) AS lb FROM ventas v JOIN entradas e ON e.id = v.entrada_id"
+               " WHERE v.calidad = ? AND e.mercado = ? AND v.fecha = ?", (calidad, mercado, fecha))
+    return round(r["t"] / r["lb"], 2) if r and r["lb"] else None
+
+
+# ===========================================================================
+# Página pública (sin iniciar sesión)
+# ===========================================================================
+CONSULTAS_FALLIDAS = {}      # ip -> [instantes de consultas fallidas]
+MAX_CONSULTAS_FALLIDAS = 10  # por IP cada 15 minutos (evita adivinar CIs)
+
+
+def precios_publicos(ctx):
+    """Precio promedio por libra de hoy (o del último día con ventas) por mercado y calidad."""
+    with BD.sesion() as bd:
+        cfg = leer_config(bd)
+        mercados = []
+        for m in MERCADOS:
+            calidades = []
+            for c in (1, 2, 3):
+                ref = precio_referencia(bd, m, c)
+                anterior, serie = None, []
+                if ref["fecha"]:
+                    previo = bd.valor("SELECT MAX(v.fecha) FROM ventas v JOIN entradas e ON e.id = v.entrada_id"
+                                      " WHERE v.calidad = ? AND e.mercado = ? AND v.fecha < ?", (c, m, ref["fecha"]))
+                    anterior = _precio_en_fecha(bd, m, c, previo) if previo else None
+                    filas = bd.todos("SELECT v.fecha AS f, SUM(v.total) AS t, SUM(v.libras) AS lb FROM ventas v"
+                                     " JOIN entradas e ON e.id = v.entrada_id WHERE v.calidad = ? AND e.mercado = ?"
+                                     " AND v.fecha <= ? GROUP BY v.fecha ORDER BY v.fecha DESC LIMIT 14", (c, m, ref["fecha"]))
+                    serie = [{"fecha": f["f"], "precio": round(f["t"] / f["lb"], 2)} for f in reversed(filas) if f["lb"]]
+                variacion = round((ref["precio"] - anterior) * 100 / anterior, 1) if ref["precio"] and anterior else None
+                calidades.append(dict(ref, calidad=c, nombre=cfg["calidades"][c], anterior=anterior,
+                                      variacion=variacion, serie=serie))
+            mercados.append({"mercado": m, "calidades": calidades})
+    return 200, {"hoy": hoy().isoformat(), "ahora": ts(ahora()), "mercados": mercados}
+
+
+def consultar_hoja_publica(ctx):
+    """El comprador consulta su hoja de ruta con el código y su CI."""
+    ip, momento = ctx.ip, time.time()
+    fallos = [t for t in CONSULTAS_FALLIDAS.get(ip, []) if momento - t < 900]
+    CONSULTAS_FALLIDAS[ip] = fallos
+    if len(fallos) >= MAX_CONSULTAS_FALLIDAS:
+        raise Error(429, "Demasiadas consultas sin resultado. Espere 15 minutos e intente de nuevo.")
+    codigo = re.sub(r"\s", "", _texto(ctx.datos, "codigo", 40).upper())
+    ci = re.sub(r"\s", "", _texto(ctx.datos, "ci", 20).upper())
+    errores = []
+    if not codigo:
+        errores.append("Escriba el código de su hoja de ruta (ej. HR-2026-000001).")
+    if not ci:
+        errores.append("Escriba su CI.")
+    elif not RE_CI.match(ci):
+        errores.append("CI inválido: de 5 a 10 dígitos, con complemento opcional (ej. 1234567-1A).")
+    if errores:
+        raise Error(400, errores)
+    with LOCK, BD.sesion() as bd:
+        s = bd.uno(SQL_SALIDAS + " WHERE s.hoja_ruta = ?", (codigo,))
+        encontrada = bool(s) and (s["ci_comprador"] or "").upper() == ci
+        if encontrada:
+            bitacora(bd, None, "CONSULTA_PUBLICA", "El comprador consultó la hoja de ruta %s" % codigo, ip)
+        else:
+            bitacora(bd, None, "CONSULTA_PUBLICA_FALLIDA", "Código %s con CI %s: sin coincidencia" % (codigo, ci), ip)
+        cfg = leer_config(bd)
+    if not encontrada:  # el error se lanza fuera de la transacción para que el registro quede guardado
+        fallos.append(momento)
+        raise Error(404, "No encontramos una hoja de ruta con ese código y CI. Revise los datos e intente de nuevo.")
+    estado = estado_hoja(s)
+    datos = {k: s[k] for k in ("hoja_ruta", "emitida", "vence", "departamento", "libras", "calidad", "placa",
+                               "transportista", "ci_transportista", "comprador", "mercado", "procedencia")}
+    datos.update(estado=estado, calidad_nombre=nombre_calidad(cfg, s["calidad"]),
+                 motivo_anulacion=s["motivo_anulacion"] if estado == "ANULADA" else None, ahora=ts(ahora()))
+    return 200, datos
+
+
 # ===========================================================================
 # Saldos y hojas de ruta
 # ===========================================================================
@@ -1529,6 +1604,8 @@ def generar_datos_ejemplo(bd):
 # ===========================================================================
 RUTAS = [
     ("GET", r"/api/config", None, config_publica),
+    ("GET", r"/api/publico/precios", None, precios_publicos),
+    ("POST", r"/api/publico/hoja", None, consultar_hoja_publica),
     ("GET", r"/api/resumen", "panel", resumen),
     ("GET", r"/api/precio-referencia", "registrar", ref_precio),
     ("GET", r"/api/entradas", "registrar", listar_entradas),

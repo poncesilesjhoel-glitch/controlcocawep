@@ -376,6 +376,51 @@ class PruebasSistema(unittest.TestCase):
                 self.assertTrue(resp.read().startswith(b"\xef\xbb\xbf"), nombre)
 
 
+    # ------------------------------------------------------------------ página pública
+    def test_18_precios_publicos_sin_sesion(self):
+        cod, r = Cliente(self.base).get("/api/publico/precios")
+        self.assertEqual(cod, 200)
+        self.assertEqual([m["mercado"] for m in r["mercados"]], [VF, SC])
+        for m in r["mercados"]:
+            self.assertEqual([c["calidad"] for c in m["calidades"]], [1, 2, 3])
+            for c in m["calidades"]:
+                self.assertTrue(c["precio"] and c["fecha"], "%s %s" % (m["mercado"], c["nombre"]))
+                self.assertLessEqual(c["fecha"], r["hoy"])
+        # Coincide con el promedio ponderado calculado directamente en la base
+        c1 = r["mercados"][0]["calidades"][0]
+        f = sql("SELECT SUM(v.total) AS t, SUM(v.libras) AS lb FROM ventas v JOIN entradas e ON e.id = v.entrada_id"
+                " WHERE v.calidad = 1 AND e.mercado = ? AND v.fecha = ?", (VF, c1["fecha"]))[0]
+        self.assertAlmostEqual(c1["precio"], round(f["t"] / f["lb"], 2), places=2)
+
+    def test_19_consulta_publica_de_hoja(self):
+        op = self.cliente("operador_vf")
+        hoja = self._salida(op, self._venta(op, self._entrada(op), 40)["id"], 40)  # comprador CI 7654321
+        anon = Cliente(self.base)
+        cod, r = anon.post("/api/publico/hoja", {"codigo": hoja.lower(), "ci": "7654321"})
+        self.assertEqual(cod, 200, r)
+        self.assertEqual((r["estado"], r["departamento"], r["libras"], r["placa"]), ("VIGENTE", "Tarija", 40.0, "2345ABC"))
+        self.assertEqual(r["calidad_nombre"], "Primera")
+        self.assertTrue(r["vence"])
+        cod, r = anon.post("/api/publico/hoja", {"codigo": hoja, "ci": "1111111"})
+        self.assertEqual(cod, 404)
+        self.assertNotIn("CI incorrecto", r["errores"][0])  # no revela cuál dato falló
+        self.assertEqual(anon.post("/api/publico/hoja", {"codigo": hoja, "ci": "12AB"})[0], 400)
+        # Lo privado sigue pidiendo sesión
+        for ruta in ("/api/resumen", "/api/entradas", "/api/ventas", "/api/salidas", "/api/hojas", "/api/usuarios", "/api/bitacora"):
+            self.assertEqual(anon.get(ruta)[0], 401, ruta)
+        adm = self.cliente("admin")
+        acciones = {x["accion"] for x in adm.get("/api/bitacora")[1]["registros"]}
+        self.assertTrue({"CONSULTA_PUBLICA", "CONSULTA_PUBLICA_FALLIDA"} <= acciones)
+
+    def test_20_consulta_publica_limita_intentos(self):
+        app.CONSULTAS_FALLIDAS.clear()
+        anon = Cliente(self.base)
+        for i in range(app.MAX_CONSULTAS_FALLIDAS):
+            self.assertEqual(anon.post("/api/publico/hoja", {"codigo": "HR-2026-999999", "ci": "%07d" % (1000000 + i)})[0], 404)
+        self.assertEqual(anon.post("/api/publico/hoja", {"codigo": "HR-2026-999999", "ci": "7654321"})[0], 429)
+        app.CONSULTAS_FALLIDAS.clear()
+
+
 class PruebaMigracion(unittest.TestCase):
     def test_migra_base_antigua_sin_borrar_datos(self):
         ruta = os.path.join(_TMP, "antigua.db")

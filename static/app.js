@@ -408,10 +408,18 @@ function itemsMenu() {
   if (r === 'admin') it.push(['usuarios', 'Administración']);
   return it;
 }
-function pintarBarra() {
+function pintarBarra(modo) {
   const nav = document.getElementById('menu');
-  document.body.classList.toggle('sin-sesion', !SESION);
-  if (!SESION) { nav.innerHTML = ''; return; }
+  document.body.classList.toggle('sin-sesion', !SESION && modo !== 'publico');
+  document.body.classList.toggle('publico', modo === 'publico');
+  if (!SESION) {
+    nav.innerHTML = modo === 'publico'
+      ? '<a href="#/?ir=precios" data-ir="sec-precios">Precio del día</a><a href="#/?ir=consulta" data-ir="sec-consulta">Consultar mi hoja de ruta</a>' +
+        '<a class="btn-entrar" href="#/login">' + ICO.candado.replace('<svg', '<svg width="15" height="15" style="vertical-align:-2px;margin-right:5px"') + 'Ingreso del personal</a>'
+      : '';
+    enlazarIr(nav);
+    return;
+  }
   fondoSuave();
   nav.innerHTML = itemsMenu().map(([r, t]) => '<a href="#/' + r + '" data-r="' + r + '">' + t + '</a>').join('') +
     '<div class="zona-usuario"><button class="chip-usuario" id="chipU" aria-haspopup="true"><span class="avatar">' + esc(iniciales(SESION.nombre)) + '</span>' +
@@ -419,7 +427,7 @@ function pintarBarra() {
     '<small>' + esc(SESION.mercado || (SESION.rol === 'controlador' ? 'Control en carretera' : 'Todos los mercados')) + '</small></span> ▾</button>' +
     '<div class="menu-usuario" id="menuU"><div class="cab"><strong>' + esc(SESION.nombre) + '</strong><small>@' + esc(SESION.usuario) + ' · ' + esc(SESION.rol_nombre) +
     (SESION.mercado ? ' · ' + esc(SESION.mercado) : '') + '</small></div>' +
-    '<a href="#/cuenta">Mi cuenta y contraseña</a>' +
+    '<a href="#/cuenta">Mi cuenta y contraseña</a><a href="#/inicio">Ver la página pública</a>' +
     (SESION.rol === 'admin' ? '<a href="#/usuarios">Usuarios</a><a href="#/bitacora">Bitácora</a><a href="#/configuracion">Configuración</a>' : '') +
     '<button class="salir" id="btnSalir">Cerrar sesión</button></div></div>';
   const menu = document.getElementById('menuU');
@@ -428,11 +436,220 @@ function pintarBarra() {
     try { await api('/api/logout', {}); } catch (e) { /* nada */ }
     SESION = null;
     toast('ok', 'Sesión cerrada', 'Hasta pronto.');
-    location.hash = '#/login';
+    location.hash = '#/';
   };
 }
 document.addEventListener('click', () => { const m = document.getElementById('menuU'); if (m) m.classList.remove('abierto'); });
 const inicio = () => SESION && SESION.rol === 'controlador' ? 'verificar' : '';
+
+/* ------------------------------------------------------------------ efectos de la página pública */
+// Aparece al desplazarse (y anima gráficos y cifras la primera vez que se ve)
+let observador = null;
+function revelar(raiz) {
+  const els = (raiz || document).querySelectorAll('.revelar:not(.visible)');
+  const mostrar = el => { el.classList.add('visible'); if (el.hasAttribute('data-animar')) animar(el); };
+  if (!MOVIMIENTO || !('IntersectionObserver' in window)) { els.forEach(mostrar); return; }
+  if (!observador) {
+    observador = new IntersectionObserver(entradas => entradas.forEach(e => {
+      if (e.isIntersecting) { observador.unobserve(e.target); mostrar(e.target); }
+    }), { threshold: 0.12 });
+  }
+  els.forEach(el => observador.observe(el));
+}
+// Tarjetas que se inclinan en 3D siguiendo el puntero, con un brillo
+function inclinar(raiz) {
+  if (!MOVIMIENTO || !window.matchMedia('(hover: hover)').matches) return;
+  raiz.querySelectorAll('.inclinar').forEach(el => {
+    el.addEventListener('mousemove', e => {
+      const r = el.getBoundingClientRect(), x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      el.style.transform = 'perspective(700px) rotateX(' + ((0.5 - y) * 10).toFixed(2) + 'deg) rotateY(' + ((x - 0.5) * 12).toFixed(2) + 'deg) translateY(-4px)';
+      el.style.setProperty('--mx', (x * 100).toFixed(1) + '%');
+      el.style.setProperty('--my', (y * 100).toFixed(1) + '%');
+    });
+    el.addEventListener('mouseleave', () => { el.style.transform = ''; });
+  });
+}
+// Minigráfico de la tendencia del precio
+function sparkline(serie, color) {
+  if (!serie || serie.length < 2) return '<div class="spark-vacio">Sin historial suficiente</div>';
+  const W = 160, H = 40, p = serie.map(s => s.precio), mn = Math.min(...p), mx = Math.max(...p), rango = (mx - mn) || 1;
+  const pts = p.map((v, i) => [i * W / (p.length - 1), 4 + (H - 8) * (1 - (v - mn) / rango)]);
+  const linea = pts.map(q => q[0].toFixed(1) + ',' + q[1].toFixed(1)).join(' ');
+  const ult = pts[pts.length - 1];
+  return '<svg class="grafico spark" viewBox="-2 0 ' + (W + 6) + ' ' + H + '" preserveAspectRatio="none" aria-hidden="true">' +
+    '<polygon class="spark-area" fill="' + color + '" points="0,' + H + ' ' + linea + ' ' + W + ',' + H + '"/>' +
+    '<polyline class="linea-c" stroke="' + color + '" points="' + linea + '"/>' +
+    '<line class="spark-pt" x1="' + ult[0].toFixed(1) + '" y1="' + ult[1].toFixed(1) + '" x2="' + ult[0].toFixed(1) + '" y2="' + ult[1].toFixed(1) + '" stroke="' + color + '" vector-effect="non-scaling-stroke"/></svg>';
+}
+function variacionHtml(v) {
+  if (v === null || v === undefined) return '<span class="var neutra">—</span>';
+  if (Math.abs(v) < 0.05) return '<span class="var neutra">= 0 %</span>';
+  return '<span class="var ' + (v > 0 ? 'sube' : 'baja') + '" title="Frente al día anterior con ventas">' + (v > 0 ? '▲ ' : '▼ ') + fmtNum(Math.abs(v), 1) + ' %</span>';
+}
+const fechaDe = s => new Date(String(s).replace(' ', 'T'));
+function textoRestante(ms) {
+  const neg = ms < 0; ms = Math.abs(ms);
+  const d = Math.floor(ms / 864e5), h = Math.floor(ms % 864e5 / 36e5), m = Math.floor(ms % 36e5 / 6e4), s = Math.floor(ms % 6e4 / 1e3);
+  const t = (d ? d + ' d ' : '') + String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0');
+  return neg ? 'Venció hace ' + t : 'Vence en ' + t;
+}
+
+/* ------------------------------------------------------------------ Página pública (sin iniciar sesión) */
+function enlazarIr(raiz) {
+  raiz.querySelectorAll('[data-ir]').forEach(a => {
+    a.addEventListener('click', e => {
+      const destino = document.getElementById(a.dataset.ir);
+      if (!destino) return;
+      e.preventDefault();
+      document.getElementById('menu').classList.remove('abierto');
+      destino.scrollIntoView({ behavior: MOVIMIENTO ? 'smooth' : 'auto', block: 'start' });
+      if (a.dataset.ir === 'sec-consulta') setTimeout(() => { const c = document.getElementById('pCodigo'); if (c) c.focus({ preventScroll: true }); }, MOVIMIENTO ? 600 : 0);
+    });
+  });
+}
+async function vistaPublica(params) {
+  const pasosPub = [
+    ['entrada', 'Entrada', 'El productor llega al galpón; se pesa la hoja y se registra su calidad.'],
+    ['venta', 'Venta', 'Productor y comprador acuerdan el precio por libra.'],
+    ['camion', 'Salida', 'Se emite la hoja de ruta con QR, destino, libras y vencimiento.'],
+    ['escudo', 'Verificación', 'La policía escanea el QR en la tranca y compara con la carga.'],
+  ];
+  $app.innerHTML = '<div class="publica">' +
+    '<section class="heroe-pub" id="heroePub"><div class="lluvia-hero" aria-hidden="true">' + hojasCayendo(14, 0.1, 0.32, 11, 22, 14, 40) + '</div><div class="brillo-cursor"></div>' +
+    '<div class="heroe-pub-txt"><div class="chips"><span class="chip-h"><span class="punto-vivo"></span>Información pública</span><span class="chip-h reloj" id="relojPub"></span></div>' +
+    '<h1>Precio del día de la <span class="resalte">hoja de coca</span></h1>' +
+    '<p>Precio promedio por libra en los mercados autorizados de Villa Fátima (La Paz) y Sacaba (Cochabamba). Si compró hoja de coca, consulte aquí su hoja de ruta.</p>' +
+    '<div class="acciones-heroe"><a class="btn ocre" href="#/?ir=consulta" data-ir="sec-consulta">' + ICO.qr + ' Consultar mi hoja de ruta</a>' +
+    '<a class="btn claro" href="#/login">' + ICO.candado + ' Ingreso del personal</a></div></div>' +
+    '<div class="heroe-flor" aria-hidden="true"><div class="flor" id="florPub"></div></div></section>' +
+    '<div class="cinta" aria-hidden="true"><div class="cinta-pista" id="cinta"><span>Cargando precios del día…</span></div></div>' +
+
+    '<section class="seccion-pub revelar" id="sec-precios"><div class="tarjeta-cab"><div><h2>Precio del día</h2>' +
+    '<p class="sub" style="margin:0" id="notaPrecios">Promedio ponderado por libras de las ventas de hoy en cada mercado.</p></div></div>' +
+    '<div id="precios"><div class="precios-grid">' + [1, 2, 3].map(() => esqueleto(190)).join('') + '</div></div></section>' +
+
+    '<section class="seccion-pub revelar" id="sec-consulta"><div class="consulta-grid"><div>' +
+    '<h2>Consultar mi hoja de ruta</h2><p class="sub">Escriba el código impreso en su hoja de ruta y su número de CI (el del comprador). Podrá ver su estado y volver a imprimirla con su código QR.</p>' +
+    '<form id="fConsulta" class="form-consulta" autocomplete="off" novalidate>' +
+    '<label for="pCodigo">Código de la hoja de ruta</label><input id="pCodigo" name="codigo" class="input-codigo" placeholder="HR-' + new Date().getFullYear() + '-000001" autocapitalize="characters" data-req>' +
+    '<label for="pCi">CI del comprador</label><input id="pCi" name="ci" placeholder="Ej. 4567890 o 4567890-1A" inputmode="text" data-req>' +
+    '<button class="btn ancho" type="submit">' + ICO.buscar + ' Consultar</button>' +
+    '<p class="muted" style="font-size:.8rem;margin:10px 0 0">Por seguridad, solo se muestra si el código y el CI coinciden.</p></form></div>' +
+    '<div id="resConsulta" class="res-consulta"><div class="consulta-vacia">' + HOJA('hoja-grande') + '<p>Aquí aparecerá su hoja de ruta.</p></div></div></div></section>' +
+
+    '<section class="seccion-pub revelar"><h2>¿Cómo funciona el control?</h2><div class="pasos-pub">' +
+    pasosPub.map((p, i) => '<div class="paso-pub revelar" style="--i:' + i + '"><span class="paso-ico">' + ICO[p[0]] + '<b>' + (i + 1) + '</b></span><strong>' + p[1] + '</strong><p>' + p[2] + '</p></div>').join('') +
+    '</div></section>' +
+    '<p class="pie-publico">¿Es personal autorizado? <a href="#/login">Ingrese aquí</a></p>' +
+    '</div><div id="guiaImprimible" class="guia-imprimible"></div>';
+
+  enlazarIr($app);
+  flor(document.getElementById('florPub'));
+  revelar($app);
+  // Reloj y brillo que sigue al cursor
+  const reloj = document.getElementById('relojPub');
+  const tic = () => { if (!document.body.contains(reloj)) return clearInterval(tRel); const d = new Date(); reloj.textContent = mayus(DIAS[d.getDay()]) + ', ' + fmtFecha(isoLocal(d)) + ' · ' + d.toTimeString().slice(0, 5); };
+  const tRel = setInterval(tic, 10000); tic();
+  const heroe = document.getElementById('heroePub');
+  if (MOVIMIENTO) heroe.addEventListener('mousemove', e => {
+    const r = heroe.getBoundingClientRect();
+    heroe.style.setProperty('--cx', (e.clientX - r.left) + 'px');
+    heroe.style.setProperty('--cy', (e.clientY - r.top) + 'px');
+  });
+
+  // Consulta de la hoja de ruta
+  const f = document.getElementById('fConsulta');
+  quitarInvalido(f);
+  f.onsubmit = async ev => {
+    ev.preventDefault();
+    if (!requeridos(f)) return;
+    const btn = f.querySelector('button[type=submit]'), res = document.getElementById('resConsulta');
+    botonCargando(btn, true, 'Buscando…');
+    res.innerHTML = '<div class="escaner">Buscando ' + esc(f.codigo.value.trim().toUpperCase()) + '…</div>';
+    const [r] = await Promise.allSettled([api('/api/publico/hoja', { codigo: f.codigo.value, ci: f.ci.value }), espera(MOVIMIENTO ? 650 : 0)]);
+    botonCargando(btn, false);
+    if (r.status !== 'fulfilled') {
+      res.innerHTML = '<div class="resultado invalida"><div class="sello-wrap"><span class="icono">✕</span><span class="sello">NO ENCONTRADA</span></div><p>' + esc(((r.reason || {}).errores || ['Error']).join(' ')) + '</p></div>';
+      sacudir(f);
+      return;
+    }
+    mostrarGuia(r.value, res);
+  };
+
+  // Precios del día
+  let datos;
+  try { datos = await api('/api/publico/precios'); }
+  catch (e) { document.getElementById('precios').innerHTML = '<div class="mensaje error">' + esc((e.errores || []).join(' ')) + '</div>'; return; }
+  const todosHoy = datos.mercados.every(m => m.calidades.every(c => c.es_hoy));
+  document.getElementById('notaPrecios').innerHTML = (todosHoy ? 'Precios de hoy, ' : 'Hoy, ') + fmtFechaLarga(datos.hoy) +
+    (todosHoy ? '.' : '. Donde todavía no hubo ventas hoy se muestra el último día con ventas.') + ' Promedio ponderado por libras: es una referencia, el precio final lo acuerdan productor y comprador.';
+  document.getElementById('precios').innerHTML = datos.mercados.map((m, im) =>
+    '<div class="mercado-precios revelar" data-animar style="--i:' + im + '"><h3>' + ICO.almacen + esc(m.mercado) + '</h3><div class="precios-grid">' +
+    m.calidades.map((c, i) =>
+      '<div class="precio-card c' + c.calidad + ' inclinar esc" style="--i:' + (i + im * 3) + '">' + HOJA('pc-hoja') +
+      '<div class="pc-cab">' + calChip(c.calidad) + variacionHtml(c.variacion) + '</div>' +
+      '<div class="pc-valor"' + (c.precio ? ' data-contar="' + c.precio + '" data-fmt="bs">Bs 0,00' : '>—') + '</div><div class="pc-unidad">por libra</div>' +
+      sparkline(c.serie, COLOR_CAL[c.calidad]) +
+      '<div class="pc-fecha ' + (c.es_hoy ? 'hoy' : '') + '">' + (c.precio ? (c.es_hoy ? '<span class="punto-vivo"></span>Hoy · ' + fmtLb(c.libras) + ' vendidas' : 'Último día con ventas: <strong>' + fmtFecha(c.fecha) + '</strong>') : 'Sin ventas registradas') + '</div>' +
+      '</div>').join('') + '</div></div>').join('');
+  revelar(document.getElementById('precios'));
+  inclinar(document.getElementById('precios'));
+  // Cinta de precios en movimiento (contenido duplicado para un recorrido continuo)
+  const items = datos.mercados.flatMap(m => m.calidades.filter(c => c.precio).map(c =>
+    '<span class="cinta-item">' + HOJA() + '<b>' + esc(mercadoCorto(m.mercado)) + '</b> ' + esc(c.nombre) + ' <strong>' + fmtBs(c.precio) + '</strong> ' + variacionHtml(c.variacion) + '</span>')).join('');
+  document.getElementById('cinta').innerHTML = MOVIMIENTO ? items + items : items;
+  if (params.get('ir')) { const d = document.getElementById('sec-' + params.get('ir')); if (d) d.scrollIntoView({ behavior: MOVIMIENTO ? 'smooth' : 'auto' }); }
+}
+
+function mostrarGuia(h, res) {
+  const offset = fechaDe(h.ahora) - Date.now();   // diferencia con el reloj del servidor (hora de Bolivia)
+  const vence = fechaDe(h.vence);
+  res.innerHTML = '<div class="guia-res ' + h.estado + '">' +
+    '<div class="gr-cab"><div><small>Hoja de ruta</small><strong class="codigo">' + esc(h.hoja_ruta) + '</strong></div><span class="estado grande ' + h.estado + '">' + h.estado + '</span></div>' +
+    (h.estado === 'ANULADA' ? '<div class="aviso-anulada">Esta hoja de ruta fue ANULADA. Motivo: ' + esc(h.motivo_anulacion) + '. Consulte en el mercado.</div>' : '') +
+    '<div class="gr-destino"><div><small>Destino</small><strong>' + esc(h.departamento) + '</strong></div><div><small>Cantidad</small><strong>' + fmtLb(h.libras) + '</strong></div></div>' +
+    '<dl class="dl"><dt>Calidad</dt><dd>' + calChip(h.calidad) + '</dd>' +
+    '<dt>Placa</dt><dd>' + esc(h.placa || 'Sin vehículo registrado') + '</dd>' +
+    '<dt>Transportista</dt><dd>' + esc(h.transportista) + '</dd>' +
+    '<dt>Emitida</dt><dd>' + fmtFH(h.emitida) + '</dd>' +
+    '<dt>Vence</dt><dd>' + fmtFH(h.vence) + '</dd></dl>' +
+    (h.estado !== 'ANULADA' ? '<div class="cuenta-regresiva ' + h.estado + '" id="cuentaReg"></div>' : '') +
+    '<button class="btn ancho" id="imprimirGuia">🖨 Imprimir mi hoja de ruta</button></div>';
+  const cr = document.getElementById('cuentaReg');
+  if (cr) {
+    const tic = () => {
+      if (!document.body.contains(cr)) return clearInterval(t);
+      const resta = vence - (Date.now() + offset);
+      cr.textContent = textoRestante(resta);
+      cr.classList.toggle('VENCIDA', resta < 0);
+    };
+    const t = setInterval(tic, 1000); tic();
+  }
+  // Documento imprimible (solo se ve al imprimir)
+  const g = document.getElementById('guiaImprimible');
+  g.innerHTML = '<article class="hoja' + (h.estado === 'ANULADA' ? ' anulada' : '') + '"><span class="sello-emitida ' + h.estado + '">' + h.estado + '</span>' +
+    '<div class="hoja-cab"><div><div class="inst">Sistema de Control de Comercialización de la Hoja de Coca</div><h1>HOJA DE RUTA</h1>' +
+    '<div class="cod">' + esc(h.hoja_ruta) + '</div><div class="vigencia"><span>Emitida: <strong>' + fmtFH(h.emitida) + '</strong></span><span>Vence: <strong>' + fmtFH(h.vence) + '</strong></span></div>' +
+    '<div class="ayuda">Mercado ' + esc(h.mercado) + '</div></div><div class="qr" id="qrGuia"></div></div>' +
+    (h.estado === 'ANULADA' ? '<div class="aviso-anulada">ANULADA. Motivo: ' + esc(h.motivo_anulacion) + '</div>' : '') +
+    '<div class="destaque"><div><div class="etq">Departamento de destino</div><div class="grande">' + esc(h.departamento).toUpperCase() + '</div><div class="det">Calidad ' + esc(h.calidad_nombre) + '</div></div>' +
+    '<div><div class="etq">Cantidad autorizada</div><div class="grande">' + fmtLb(h.libras) + '</div><div class="det">≈ ' + fmtTq(h.libras / CONFIG.libras_por_taque) + ' taques</div></div></div>' +
+    '<div class="datos"><section><h3>Transporte</h3><dl class="dl"><dt>Transportista</dt><dd>' + esc(h.transportista) + '</dd><dt>CI</dt><dd>' + esc(h.ci_transportista) + '</dd>' +
+    '<dt>Placa</dt><dd>' + esc(h.placa || 'Sin vehículo registrado') + '</dd><dt>Comprador</dt><dd>' + esc(h.comprador) + '</dd></dl></section>' +
+    '<section><h3>Origen de la hoja</h3><dl class="dl"><dt>Mercado</dt><dd>' + esc(h.mercado) + '</dd><dt>Procedencia</dt><dd>' + esc(h.procedencia) + '</dd>' +
+    '<dt>Calidad</dt><dd>' + esc(h.calidad_nombre) + '</dd></dl></section></div>' +
+    '<div class="firmas"><div>Responsable del galpón</div><div>Transportista</div><div>Control en ruta</div></div>' +
+    '<div class="hoja-pie">Copia impresa por el comprador el ' + fmtFH(h.ahora) + '. La policía verifica este documento escaneando el código QR. Válido solo para el destino, la cantidad y el plazo indicados.</div></article>';
+  const qr = document.getElementById('qrGuia'), url = location.origin + '/#/verificar/' + h.hoja_ruta;
+  if (window.QRCode) { try { new QRCode(qr, { text: url, width: 150, height: 150, correctLevel: QRCode.CorrectLevel.M }); } catch (e) { qr.innerHTML = '<div class="qr-texto">' + esc(h.hoja_ruta) + '</div>'; } }
+  else qr.innerHTML = '<div class="qr-texto"><strong>Código:</strong><br>' + esc(h.hoja_ruta) + '<br><br>' + esc(url) + '<br><small>(QR no disponible sin internet)</small></div>';
+  document.getElementById('imprimirGuia').onclick = () => {
+    document.body.classList.add('solo-guia');
+    window.print();
+    setTimeout(() => document.body.classList.remove('solo-guia'), 500);
+  };
+  if (MOVIMIENTO) res.querySelector('.guia-res').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 
 /* ------------------------------------------------------------------ Login */
 async function vistaLogin(params) {
@@ -450,7 +667,7 @@ async function vistaLogin(params) {
     '<button class="btn ancho" type="submit">Entrar</button>' +
     '<p class="login-nota">Las cuentas las crea el administrador. Tras 5 intentos fallidos el usuario se bloquea 5 minutos.' +
     (local ? '<br><br><strong>Solo para la demostración:</strong> admin / admin123 · operador_vf, operador_sc, supervisor1, control1 / prueba123' : '') + '</p>' +
-    '</div></form></div></div>';
+    '</div></form><p style="text-align:center;margin-top:16px"><a href="#/" class="volver-publico">← Volver a la página pública</a></p></div></div>';
   const f = document.getElementById('form');
   quitarInvalido(f);
   setTimeout(() => f.usuario.focus(), 50);
@@ -1253,6 +1470,12 @@ async function enrutar() {
   document.getElementById('menuBtn').setAttribute('aria-expanded', 'false');
   window.scrollTo(0, 0);
   try {
+    // Página pública: se ve sin iniciar sesión (y el personal también puede abrirla en #/inicio)
+    if (partes[0] === 'inicio' || (!SESION && partes[0] === '')) {
+      pintarBarra('publico');
+      await vistaPublica(params);
+      return;
+    }
     if (!SESION) {
       pintarBarra();
       if (partes[0] !== 'login') { location.replace('#/login' + (h ? '?volver=' + encodeURIComponent(h) : '')); return; }
